@@ -1,3 +1,6 @@
 build/
 diff_gaussian_rasterization.egg-info/
 dist/
+.cache
+**/compile_commands.json
+diff_gaussian_rasterization/
