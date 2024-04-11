@@ -1,0 +1,15 @@
+CompileFlags:
+  Add:
+    - --cuda-gpu-arch=sm_86
+    - --cuda-path=/home/shuqixiao/.local/miniconda3/envs/MonoGS/
+    - -I/home/shuqixiao/.local/miniconda3/envs/MonoGS/include/python3.10/
+    - -I/home/shuqixiao/.local/miniconda3/envs/MonoGS/targets/x86_64-linux/include/
+    - -I/home/shuqixiao/.local/miniconda3/envs/MonoGS/lib/python3.10/site-packages/torch/include/
+    - -I/home/shuqixiao/.local/miniconda3/envs/MonoGS/lib/python3.10/site-packages/torch/include/torch/csrc/api/include/
+    - -I/mnt/dev-ssd-8T/shuqixiao/dev/projects/MonoGS/submodules/diff-gaussian-rasterization/third_party/glm/
+    - -ferror-limit=0
+  Remove:
+    - -forward-unknown-to-host-compiler
+    - --generate-code*
+    - --options-file
+  Compiler: /home/shuqixiao/.local/miniconda3/envs/MonoGS/bin/nvcc
