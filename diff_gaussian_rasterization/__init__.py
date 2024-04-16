@@ -15,6 +15,22 @@ import torch
 from . import _C
 
 
+class GaussianRasterizationSettings(NamedTuple):
+    image_height: int
+    image_width: int
+    tanfovx: float
+    tanfovy: float
+    background_color: torch.Tensor
+    scale_modifier: float
+    viewmatrix: torch.Tensor
+    projmatrix: torch.Tensor
+    projmatrix_raw: torch.Tensor
+    sh_degree: int
+    campos: torch.Tensor
+    prefiltered: bool
+    debug: bool
+
+
 def cpu_deep_copy_tuple(input_tuple):
     copied_tensors = [
         item.cpu().clone() if isinstance(item, torch.Tensor) else item
@@ -34,7 +50,7 @@ def rasterize_gaussians(
     cov3Ds_precomp,
     theta,
     rho,
-    raster_settings,
+    raster_settings: GaussianRasterizationSettings,
 ):
     return _RasterizeGaussians.apply(
         means3D,
@@ -63,7 +79,7 @@ def rasterize_semantic_gaussians(
     cov3Ds_precomp,
     theta,
     rho,
-    raster_settings,
+    raster_settings: GaussianRasterizationSettings,
 ):
     return _RasterizeSemanticGaussians.apply(
         means3D,
@@ -95,11 +111,11 @@ class _RasterizeGaussians(torch.autograd.Function):
         cov3Ds_precomp,
         theta,
         rho,
-        raster_settings,
+        raster_settings: GaussianRasterizationSettings,
     ):
         # Restructure arguments the way that the C++ lib expects them
         args = (
-            raster_settings.bg,
+            raster_settings.background_color,
             means3D,
             colors_precomp,
             opacities,
@@ -201,7 +217,7 @@ class _RasterizeGaussians(torch.autograd.Function):
 
         # Restructure args as C++ method expects them
         args = (
-            raster_settings.bg,
+            raster_settings.background_color,
             means3D,
             radii,
             colors_precomp,
@@ -298,12 +314,12 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
         cov3Ds_precomp,
         theta,
         rho,
-        raster_settings,
+        raster_settings: GaussianRasterizationSettings,
     ):
         # Restructure arguments the way that the C++ lib expects them
         args = (
-            raster_settings.bg,
-            raster_settings.bg,  # TODO
+            raster_settings.background_color,
+            raster_settings.background_color,  # TODO
             means3D,
             colors_precomp,
             semantics_precomp,
@@ -411,8 +427,8 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
 
         # Restructure args as C++ method expects them
         args = (
-            raster_settings.bg,
-            raster_settings.bg,  # TODO
+            raster_settings.background_color,
+            raster_settings.background_color,  # TODO
             means3D,
             radii,
             colors_precomp,
@@ -499,24 +515,8 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
         return grads
 
 
-class GaussianRasterizationSettings(NamedTuple):
-    image_height: int
-    image_width: int
-    tanfovx: float
-    tanfovy: float
-    bg: torch.Tensor
-    scale_modifier: float
-    viewmatrix: torch.Tensor
-    projmatrix: torch.Tensor
-    projmatrix_raw: torch.Tensor
-    sh_degree: int
-    campos: torch.Tensor
-    prefiltered: bool
-    debug: bool
-
-
 class GaussianRasterizer(nn.Module):
-    def __init__(self, raster_settings):
+    def __init__(self, raster_settings: GaussianRasterizationSettings):
         super().__init__()
         self.raster_settings = raster_settings
 
