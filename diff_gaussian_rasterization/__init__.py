@@ -350,7 +350,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             try:
                 (
                     num_rendered,
-                    color,
+                    colors,
                     semantics,
                     radii,
                     semantic_geometry_buffer,
@@ -369,7 +369,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
         else:
             (
                 num_rendered,
-                color,
+                colors,
                 semantics,
                 radii,
                 semantic_geometry_buffer,
@@ -396,7 +396,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             binning_buffer,
             image_buffer,
         )
-        return color, semantics, radii, depth, opacity, n_touched
+        return colors, semantics, radii, depth, opacity, n_touched
 
     @staticmethod
     def backward(
