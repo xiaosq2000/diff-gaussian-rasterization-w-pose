@@ -21,20 +21,27 @@
 // Spherical harmonics coefficients
 __device__ const float SH_C0 = 0.28209479177387814f;
 __device__ const float SH_C1 = 0.4886025119029199f;
-__device__ const float SH_C2[] = {1.0925484305920792f, -1.0925484305920792f,
-                                  0.31539156525252005f, -1.0925484305920792f,
+__device__ const float SH_C2[] = {1.0925484305920792f,
+                                  -1.0925484305920792f,
+                                  0.31539156525252005f,
+                                  -1.0925484305920792f,
                                   0.5462742152960396f};
-__device__ const float SH_C3[] = {-0.5900435899266435f, 2.890611442640554f,
-                                  -0.4570457994644658f, 0.3731763325901154f,
-                                  -0.4570457994644658f, 1.445305721320277f,
+__device__ const float SH_C3[] = {-0.5900435899266435f,
+                                  2.890611442640554f,
+                                  -0.4570457994644658f,
+                                  0.3731763325901154f,
+                                  -0.4570457994644658f,
+                                  1.445305721320277f,
                                   -0.5900435899266435f};
 
 __forceinline__ __device__ float ndc2Pix(float v, int S) {
   return ((v + 1.0) * S - 1.0) * 0.5;
 }
 
-__forceinline__ __device__ void getRect(const float2 p, int max_radius,
-                                        uint2& rect_min, uint2& rect_max,
+__forceinline__ __device__ void getRect(const float2 p,
+                                        int max_radius,
+                                        uint2& rect_min,
+                                        uint2& rect_max,
                                         dim3 grid) {
   rect_min = {min(grid.x, max((int)0, (int)((p.x - max_radius) / BLOCK_X))),
               min(grid.y, max((int)0, (int)((p.y - max_radius) / BLOCK_Y)))};
@@ -129,12 +136,14 @@ __forceinline__ __device__ float sigmoid(float x) {
   return 1.0f / (1.0f + expf(-x));
 }
 
-__forceinline__ __device__ bool in_frustum(int idx, const float* orig_points,
+__forceinline__ __device__ bool in_frustum(int idx,
+                                           const float* orig_points,
                                            const float* viewmatrix,
                                            const float* projmatrix,
-                                           bool prefiltered, float3& p_view) {
-  float3 p_orig = {orig_points[3 * idx], orig_points[3 * idx + 1],
-                   orig_points[3 * idx + 2]};
+                                           bool prefiltered,
+                                           float3& p_view) {
+  float3 p_orig = {
+      orig_points[3 * idx], orig_points[3 * idx + 1], orig_points[3 * idx + 2]};
 
   // Bring points to screen space
   float4 p_hom = transformPoint4x4(p_orig, projmatrix);
