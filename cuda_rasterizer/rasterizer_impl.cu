@@ -163,8 +163,8 @@ CudaRasterizer::SemanticGeometryState::fromChunk(char*& chunk, size_t P) {
   obtain(chunk, semantic_geom.means2D, P, 128);
   obtain(chunk, semantic_geom.cov3D, P * 6, 128);
   obtain(chunk, semantic_geom.conic_opacity, P, 128);
-  obtain(chunk, semantic_geom.rgb, P * 3, 128);
-  obtain(chunk, semantic_geom.semantics, P * 3, 128);
+  obtain(chunk, semantic_geom.rgb, P * NUM_CHANNELS, 128);
+  obtain(chunk, semantic_geom.semantics, P * NUM_SEMANTIC_CHANNELS, 128);
   obtain(chunk, semantic_geom.tiles_touched, P, 128);
   cub::DeviceScan::InclusiveSum(nullptr,
                                 semantic_geom.scan_size,
@@ -385,12 +385,14 @@ int CudaRasterizer::SemanticRasterizer::forward(
     const int P,
     int degree,
     int M,
+    int semantic_M,
     const float* background_color,
     const float* background_semantics,
     const int image_width,
     int image_height,
     const float* means3D,
     const float* shs,
+    const float* semantic_shs,
     const float* colors_precomp,
     const float* semantics_precomp,
     const float* opacities,
@@ -439,21 +441,23 @@ int CudaRasterizer::SemanticRasterizer::forward(
         "For non-RGB, provide precomputed Gaussian colors!");
   }
 
-  if (NUM_CHANNELS != 3 && semantics_precomp == nullptr) {
-    throw std::runtime_error(
-        "Only Semantics Maps with 3 Channels are supported!");
-  }
+  // TODO
+  // if (semantics_precomp == nullptr) {
+  //   throw std::runtime_error("Only semantics precompuation is supported!");
+  // }
 
   // Run preprocessing per-Gaussian (transformation, bounding, conversion of SHs to RGB)
   CHECK_CUDA(FORWARD::semantic_preprocess(P,
                                           degree,
                                           M,
+                                          semantic_M,
                                           means3D,
                                           (glm::vec3*)scales,
                                           scale_modifier,
                                           (glm::vec4*)rotations,
                                           opacities,
                                           shs,
+                                          semantic_shs,
                                           semantic_geometry_state.clamped,
                                           cov3D_precomp,
                                           colors_precomp,
@@ -698,6 +702,7 @@ void CudaRasterizer::SemanticRasterizer::backward(
     const int P,
     int D,
     int M,
+    int semantic_M,
     int R,
     const float* background_color,
     const float* background_semantics,
@@ -705,6 +710,7 @@ void CudaRasterizer::SemanticRasterizer::backward(
     const int image_height,
     const float* means3D,
     const float* shs,
+    const float* semantic_shs,
     const float* colors_precomp,
     const float* semantics_precomp,
     const float* scales,
@@ -733,6 +739,7 @@ void CudaRasterizer::SemanticRasterizer::backward(
     float* dL_dmean3D,
     float* dL_dcov3D,
     float* dL_dsh,
+    float* dL_dsemantic_sh,
     float* dL_dscale,
     float* dL_drot,
     float* dL_dtau,
@@ -802,9 +809,11 @@ void CudaRasterizer::SemanticRasterizer::backward(
   CHECK_CUDA(BACKWARD::semantic_preprocess(P,
                                            D,
                                            M,
+                                           semantic_M,
                                            (float3*)means3D,
                                            radii,
                                            shs,
+                                           semantic_shs,
                                            semantic_geometry_state.clamped,
                                            (glm::vec3*)scales,
                                            (glm::vec4*)rotations,
@@ -826,6 +835,7 @@ void CudaRasterizer::SemanticRasterizer::backward(
                                            dL_ddepth,
                                            dL_dcov3D,
                                            dL_dsh,
+                                           dL_dsemantic_sh,
                                            (glm::vec3*)dL_dscale,
                                            (glm::vec4*)dL_drot,
                                            dL_dtau),

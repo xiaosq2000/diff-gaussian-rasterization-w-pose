@@ -71,6 +71,7 @@ def rasterize_semantic_gaussians(
     means3D,
     means2D,
     sh,
+    semantic_sh,
     colors_precomp,
     semantics_precomp,
     opacities,
@@ -85,6 +86,7 @@ def rasterize_semantic_gaussians(
         means3D,
         means2D,
         sh,
+        semantic_sh,
         colors_precomp,
         semantics_precomp,
         opacities,
@@ -306,6 +308,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
         means3D,
         means2D,
         sh,
+        semantic_sh,
         colors_precomp,
         semantics_precomp,
         opacities,
@@ -336,6 +339,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             raster_settings.image_height,
             raster_settings.image_width,
             sh,
+            semantic_sh,
             raster_settings.sh_degree,
             raster_settings.campos,
             raster_settings.prefiltered,
@@ -392,6 +396,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             cov3Ds_precomp,
             radii,
             sh,
+            semantic_sh,
             semantic_geometry_buffer,
             binning_buffer,
             image_buffer,
@@ -420,6 +425,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             cov3Ds_precomp,
             radii,
             sh,
+            semantic_sh,
             semantic_geometry_buffer,
             binning_buffer,
             image_buffer,
@@ -446,6 +452,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             grad_out_semantics,
             grad_out_depth,
             sh,
+            semantic_sh,
             raster_settings.sh_degree,
             raster_settings.campos,
             semantic_geometry_buffer,
@@ -469,6 +476,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
                     grad_means3D,
                     grad_cov3Ds_precomp,
                     grad_sh,
+                    grad_semantic_sh,
                     grad_scales,
                     grad_rotations,
                     grad_tau,
@@ -488,6 +496,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
                 grad_means3D,
                 grad_cov3Ds_precomp,
                 grad_sh,
+                grad_semantic_sh,
                 grad_scales,
                 grad_rotations,
                 grad_tau,
@@ -501,6 +510,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
             grad_means3D,
             grad_means2D,
             grad_sh,
+            grad_semantic_sh,
             grad_colors_precomp,
             grad_semantics_precomp,
             grad_opacities,
@@ -612,6 +622,7 @@ class SemanticGaussianRasterizer(nn.Module):
         means2D,
         opacities,
         shs=None,
+        semantic_shs=None,
         colors_precomp=None,
         semantics_precomp=None,
         scales=None,
@@ -628,6 +639,12 @@ class SemanticGaussianRasterizer(nn.Module):
             raise Exception(
                 "Please provide excatly one of either SHs or precomputed colors!"
             )
+        if (semantic_shs is None and semantics_precomp is None) or (
+            semantic_shs is not None and semantics_precomp is not None
+        ):
+            raise Exception(
+                "Please provide excatly one of either semantic SHs or precomputed semantics!"
+            )
 
         if ((scales is None or rotations is None) and cov3D_precomp is None) or (
             (scales is not None or rotations is not None) and cov3D_precomp is not None
@@ -638,6 +655,8 @@ class SemanticGaussianRasterizer(nn.Module):
 
         if shs is None:
             shs = torch.Tensor([])
+        if semantic_shs is None:
+            semantic_shs = torch.Tensor([])
         if colors_precomp is None:
             colors_precomp = torch.Tensor([])
         if semantics_precomp is None:
@@ -659,6 +678,7 @@ class SemanticGaussianRasterizer(nn.Module):
             means3D,
             means2D,
             shs,
+            semantic_shs,
             colors_precomp,
             semantics_precomp,
             opacities,

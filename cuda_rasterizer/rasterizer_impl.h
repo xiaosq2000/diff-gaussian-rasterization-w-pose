@@ -15,7 +15,9 @@
 
 namespace CudaRasterizer {
 template <typename T>
-static void obtain(char*& chunk, T*& ptr, std::size_t count,
+static void obtain(char*& chunk,
+                   T*& ptr,
+                   std::size_t count,
                    std::size_t alignment) {
   std::size_t offset =
       (reinterpret_cast<uintptr_t>(chunk) + alignment - 1) & ~(alignment - 1);

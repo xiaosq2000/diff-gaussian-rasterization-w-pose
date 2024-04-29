@@ -638,13 +638,15 @@ __global__ void preprocessCUDA(int P,
                  dL_drot);
 }
 
-template <int C>
+template <int COLOR_CHANNELS, int SEMANTIC_CHANNELS>
 __global__ void semantic_preprocess_cuda(int P,
                                          int D,
                                          int M,
+                                         int semantic_M,
                                          const float3* means,
                                          const int* radii,
                                          const float* shs,
+                                         const float* semantic_shs,
                                          const bool* clamped,
                                          const glm::vec3* scales,
                                          const glm::vec4* rotations,
@@ -660,6 +662,7 @@ __global__ void semantic_preprocess_cuda(int P,
                                          float* dL_ddepth,
                                          float* dL_dcov3D,
                                          float* dL_dsh,
+                                         float* dL_dsemantic_sh,
                                          glm::vec3* dL_dscale,
                                          glm::vec4* dL_drot,
                                          float* dL_dtau) {
@@ -751,6 +754,7 @@ __global__ void semantic_preprocess_cuda(int P,
   dL_dmeans[idx].y += dL_dpCz * viewmatrix[6];
   dL_dmeans[idx].z += dL_dpCz * viewmatrix[10];
 
+  // TODO
   for (int i = 0; i < 3; i++) {
     float3 c_rho = dp_C_d_rho.cols[i];
     float3 c_theta = dp_C_d_theta.cols[i];
@@ -770,6 +774,18 @@ __global__ void semantic_preprocess_cuda(int P,
                        (glm::vec3*)dL_dcolor,
                        (glm::vec3*)dL_dmeans,
                        (glm::vec3*)dL_dsh,
+                       dL_dtau);
+  if (semantic_shs)
+    computeColorFromSH(idx,
+                       0,  // D=0
+                       semantic_M,
+                       (glm::vec3*)means,
+                       *campos,
+                       semantic_shs,
+                       clamped,
+                       (glm::vec3*)dL_dsemantics,
+                       (glm::vec3*)dL_dmeans,
+                       (glm::vec3*)dL_dsemantic_sh,
                        dL_dtau);
 
   // Compute gradient updates due to computing covariance from scale/rotation
@@ -1088,7 +1104,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
 
   __shared__ float2 dL_dmean2D_shared[BLOCK_SIZE];
   __shared__ float3 dL_dcolors_shared[BLOCK_SIZE];
-  __shared__ float3 dL_dsemantics_shared[BLOCK_SIZE];
+  __shared__ float3 dL_dsemantics_shared[BLOCK_SIZE];  // TODO: not float3
   __shared__ float dL_ddepths_shared[BLOCK_SIZE];
   __shared__ float dL_dopacity_shared[BLOCK_SIZE];
   __shared__ float4 dL_dconic2D_shared[BLOCK_SIZE];
@@ -1197,8 +1213,8 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       float dL_dalpha = 0.0f;
       float dL_dalpha_semantics = 0.0f;
       const int global_id = collected_id[j];
-      float local_dL_dcolors[3];
-      float local_dL_dsemantics[3];
+      float local_dL_dcolors[NUM_CHANNELS];
+      float local_dL_dsemantics[NUM_SEMANTIC_CHANNELS];
 #pragma unroll
       for (int ch = 0; ch < COLOR_CHANNEL; ch++) {
         const float c = collected_colors[ch * BLOCK_SIZE + j];
@@ -1230,6 +1246,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
         local_dL_dsemantics[ch] =
             skip ? 0.0f : dchannel_dsemantics * dL_dchannel;
       }
+      // TODO
       dL_dsemantics_shared[tid].x = local_dL_dsemantics[0];
       dL_dsemantics_shared[tid].y = local_dL_dsemantics[1];
       dL_dsemantics_shared[tid].z = local_dL_dsemantics[2];
@@ -1248,6 +1265,8 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
 
       // Account for fact that alpha also influences how much of
       // the background color is added if nothing left to blend
+
+      // TODO
       float bg_dot_dpixel = 0.f;
 #pragma unroll
       for (int i = 0; i < COLOR_CHANNEL; i++) {
@@ -1294,6 +1313,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
         atomicAdd(&dL_dcolors[global_id * COLOR_CHANNEL + 0], dL_dcolors_acc.x);
         atomicAdd(&dL_dcolors[global_id * COLOR_CHANNEL + 1], dL_dcolors_acc.y);
         atomicAdd(&dL_dcolors[global_id * COLOR_CHANNEL + 2], dL_dcolors_acc.z);
+        // TODO: !
         atomicAdd(&dL_dsemantics[global_id * SEMANTICS_CHANNEL + 0],
                   dL_dsemantics_acc.x);
         atomicAdd(&dL_dsemantics[global_id * SEMANTICS_CHANNEL + 1],
@@ -1384,9 +1404,11 @@ void BACKWARD::preprocess(int P,
 void BACKWARD::semantic_preprocess(int P,
                                    int D,
                                    int M,
+                                   int semantic_M,
                                    const float3* means,
                                    const int* radii,
                                    const float* shs,
+                                   const float* semantic_shs,
                                    const bool* clamped,
                                    const glm::vec3* scales,
                                    const glm::vec4* rotations,
@@ -1408,6 +1430,7 @@ void BACKWARD::semantic_preprocess(int P,
                                    float* dL_ddepth,
                                    float* dL_dcov3D,
                                    float* dL_dsh,
+                                   float* dL_dsemantic_sh,
                                    glm::vec3* dL_dscale,
                                    glm::vec4* dL_drot,
                                    float* dL_dtau) {
@@ -1432,13 +1455,15 @@ void BACKWARD::semantic_preprocess(int P,
   // Propagate gradients for remaining steps: finish 3D mean gradients,
   // propagate color gradients to SH (if desireD), propagate 3D covariance
   // matrix gradients to scale and rotation.
-  semantic_preprocess_cuda<NUM_CHANNELS>
+  semantic_preprocess_cuda<NUM_CHANNELS, NUM_SEMANTIC_CHANNELS>
       <<<(P + 255) / 256, 256>>>(P,
                                  D,
                                  M,
+                                 semantic_M,
                                  (float3*)means,
                                  radii,
                                  shs,
+                                 semantic_shs,
                                  clamped,
                                  (glm::vec3*)scales,
                                  (glm::vec4*)rotations,
@@ -1454,6 +1479,7 @@ void BACKWARD::semantic_preprocess(int P,
                                  dL_ddepth,
                                  dL_dcov3D,
                                  dL_dsh,
+                                 dL_dsemantic_sh,
                                  dL_dscale,
                                  dL_drot,
                                  dL_dtau);

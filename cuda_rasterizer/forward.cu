@@ -285,16 +285,18 @@ __global__ void preprocess_cuda(int P,
 }
 
 // Perform initial steps for each Gaussian prior to rasterization.
-template <int C>
+template <int COLOR_CHANNELS, int SEMANTIC_CHANNELS>
 __global__ void semantic_preprocess_cuda(int num_gaussians,
                                          int D,
                                          int M,
+                                         int semantic_M,
                                          const float* orig_points,
                                          const glm::vec3* scales,
                                          const float scale_modifier,
                                          const glm::vec4* rotations,
                                          const float* opacities,
                                          const float* shs,
+                                         const float* semantic_shs,
                                          bool* clamped,
                                          const float* cov3D_precomp,
                                          const float* colors_precomp,
@@ -382,18 +384,23 @@ __global__ void semantic_preprocess_cuda(int num_gaussians,
   if (colors_precomp == nullptr) {
     glm::vec3 result = computeColorFromSH(
         index, D, M, (glm::vec3*)orig_points, *cam_pos, shs, clamped);
-    rgb[index * C + 0] = result.x;
-    rgb[index * C + 1] = result.y;
-    rgb[index * C + 2] = result.z;
+    rgb[index * COLOR_CHANNELS + 0] = result.x;
+    rgb[index * COLOR_CHANNELS + 1] = result.y;
+    rgb[index * COLOR_CHANNELS + 2] = result.z;
   }
 
   // TODO
   if (semantics_precomp == nullptr) {
-    glm::vec3 result = computeColorFromSH(
-        index, D, M, (glm::vec3*)orig_points, *cam_pos, shs, clamped);
-    semantics[index * C + 0] = result.x;
-    semantics[index * C + 1] = result.y;
-    semantics[index * C + 2] = result.z;
+    glm::vec3 result = computeColorFromSH(index,
+                                          0,  // D=0
+                                          semantic_M,
+                                          (glm::vec3*)orig_points,
+                                          *cam_pos,
+                                          semantic_shs,
+                                          clamped);
+    semantics[index * SEMANTIC_CHANNELS + 0] = result.x;
+    semantics[index * SEMANTIC_CHANNELS + 1] = result.y;
+    semantics[index * SEMANTIC_CHANNELS + 2] = result.z;
   }
 
   // Store some useful helper data for the next steps.
@@ -734,25 +741,25 @@ void FORWARD::semantic_render(const dim3 grid,
                               float* out_depth,
                               float* out_opacity,
                               int* n_touched) {
-  // TODO: SEMANTIC_CHANNELS
-  semantic_render_cuda<3, 3><<<grid, block>>>(ranges,
-                                              point_list,
-                                              W,
-                                              H,
-                                              means2D,
-                                              colors,
-                                              semantics,
-                                              conic_opacity,
-                                              final_T,
-                                              n_contrib,
-                                              bg_color,
-                                              bg_semantics,
-                                              out_color,
-                                              out_semantics,
-                                              depth,
-                                              out_depth,
-                                              out_opacity,
-                                              n_touched);
+  semantic_render_cuda<NUM_CHANNELS, NUM_SEMANTIC_CHANNELS>
+      <<<grid, block>>>(ranges,
+                        point_list,
+                        W,
+                        H,
+                        means2D,
+                        colors,
+                        semantics,
+                        conic_opacity,
+                        final_T,
+                        n_contrib,
+                        bg_color,
+                        bg_semantics,
+                        out_color,
+                        out_semantics,
+                        depth,
+                        out_depth,
+                        out_opacity,
+                        n_touched);
 }
 
 void FORWARD::preprocess(int P,
@@ -820,12 +827,14 @@ void FORWARD::preprocess(int P,
 void FORWARD::semantic_preprocess(int num_gaussians,
                                   int D,
                                   int M,
+                                  int semantic_M,
                                   const float* means3D,
                                   const glm::vec3* scales,
                                   const float scale_modifier,
                                   const glm::vec4* rotations,
                                   const float* opacities,
                                   const float* shs,
+                                  const float* semantic_shs,
                                   bool* clamped,
                                   const float* cov3D_precomp,
                                   const float* colors_precomp,
@@ -849,16 +858,18 @@ void FORWARD::semantic_preprocess(int num_gaussians,
                                   const dim3 grid,
                                   uint32_t* tiles_touched,
                                   bool prefiltered) {
-  semantic_preprocess_cuda<NUM_CHANNELS>
+  semantic_preprocess_cuda<NUM_CHANNELS, NUM_SEMANTIC_CHANNELS>
       <<<(num_gaussians + 255) / 256, 256>>>(num_gaussians,
                                              D,
                                              M,
+                                             semantic_M,
                                              means3D,
                                              scales,
                                              scale_modifier,
                                              rotations,
                                              opacities,
                                              shs,
+                                             semantic_shs,
                                              clamped,
                                              cov3D_precomp,
                                              colors_precomp,
