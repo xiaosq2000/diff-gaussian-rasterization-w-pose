@@ -12,6 +12,7 @@
 from typing import NamedTuple
 import torch.nn as nn
 import torch
+from utils.semantic_decoder import SemanticDecoder
 from . import _C
 
 
@@ -602,9 +603,14 @@ class GaussianRasterizer(nn.Module):
 
 
 class SemanticGaussianRasterizer(nn.Module):
-    def __init__(self, raster_settings: GaussianRasterizationSettings):
+    def __init__(
+        self,
+        raster_settings: GaussianRasterizationSettings,
+        semantic_decoder: SemanticDecoder,
+    ):
         super().__init__()
         self.raster_settings = raster_settings
+        self.semantic_decoder = semantic_decoder
 
     def markVisible(self, positions):
         # Mark visible points (based on frustum culling for camera) with a boolean
@@ -674,18 +680,24 @@ class SemanticGaussianRasterizer(nn.Module):
             rho = torch.Tensor([])
 
         # Invoke C++/CUDA rasterization routine
-        return rasterize_semantic_gaussians(
-            means3D,
-            means2D,
-            shs,
-            semantic_shs,
-            colors_precomp,
-            semantics_precomp,
-            opacities,
-            scales,
-            rotations,
-            cov3D_precomp,
-            theta,
-            rho,
-            raster_settings,
+        colors, semantics, radii, depth, opacity, n_touched = (
+            rasterize_semantic_gaussians(
+                means3D,
+                means2D,
+                shs,
+                semantic_shs,
+                colors_precomp,
+                semantics_precomp,
+                opacities,
+                scales,
+                rotations,
+                cov3D_precomp,
+                theta,
+                rho,
+                raster_settings,
+            )
         )
+        # Decode
+        decoded_semantics = self.semantic_decoder(semantics)
+
+        return colors, decoded_semantics, radii, depth, opacity, n_touched
