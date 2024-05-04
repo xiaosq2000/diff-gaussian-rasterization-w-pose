@@ -700,4 +700,4 @@ class SemanticGaussianRasterizer(nn.Module):
         # Decode
         decoded_semantics = self.semantic_decoder(semantics)
 
-        return colors, decoded_semantics, radii, depth, opacity, n_touched
+        return colors, semantics, decoded_semantics, radii, depth, opacity, n_touched
