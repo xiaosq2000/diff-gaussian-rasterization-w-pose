@@ -51,7 +51,7 @@ struct SemanticGeometryState {
   float* cov3D;
   float4* conic_opacity;
   float* rgb;
-  float* semantics;
+  float* semantics;  // semantics
   uint32_t* point_offsets;
   uint32_t* tiles_touched;
 

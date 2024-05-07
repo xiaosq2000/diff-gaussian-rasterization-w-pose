@@ -12,6 +12,7 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda_runtime.h>
+#include <cmath>
 #include "auxiliary.h"
 #include "backward.h"
 #include "math.h"
@@ -23,7 +24,7 @@ __device__ void computeColorFromSH(int idx,
                                    int deg,
                                    int max_coeffs,
                                    const glm::vec3* means,
-                                   glm::vec3 campos,
+                                   const glm::vec3 campos,
                                    const float* shs,
                                    const bool* clamped,
                                    const glm::vec3* dL_dcolor,
@@ -638,7 +639,7 @@ __global__ void preprocessCUDA(int P,
                  dL_drot);
 }
 
-template <int COLOR_CHANNELS, int SEMANTIC_CHANNELS>
+template <uint32_t COLOR_CHANNELS, uint32_t SEMANTIC_CHANNELS>
 __global__ void semantic_preprocess_cuda(int P,
                                          int D,
                                          int M,
@@ -754,7 +755,6 @@ __global__ void semantic_preprocess_cuda(int P,
   dL_dmeans[idx].y += dL_dpCz * viewmatrix[6];
   dL_dmeans[idx].z += dL_dpCz * viewmatrix[10];
 
-  // TODO
   for (int i = 0; i < 3; i++) {
     float3 c_rho = dp_C_d_rho.cols[i];
     float3 c_theta = dp_C_d_theta.cols[i];
@@ -775,7 +775,9 @@ __global__ void semantic_preprocess_cuda(int P,
                        (glm::vec3*)dL_dmeans,
                        (glm::vec3*)dL_dsh,
                        dL_dtau);
-  if (semantic_shs)
+
+  // TODO
+  if (semantic_shs) {
     computeColorFromSH(idx,
                        0,  // D=0
                        semantic_M,
@@ -787,6 +789,38 @@ __global__ void semantic_preprocess_cuda(int P,
                        (glm::vec3*)dL_dmeans,
                        (glm::vec3*)dL_dsemantic_sh,
                        dL_dtau);
+
+    // float dL_dsemantic_render[SEMANTIC_CHANNELS] = {0.f};
+    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
+    //   dL_dsemantic_render[i] = dL_dsemantic_sh[idx * SEMANTIC_CHANNELS + i] *
+    //                          (clamped[idx * SEMANTIC_CHANNELS + i] ? 0 : 1);
+    // }
+    // glm::vec3* sh = ((glm::vec3*)dL_dsemantic_sh) + idx * semantic_M;
+    // float length = 0;
+    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
+    //   length += dL_dsemantic_render[i] * dL_dsemantic_render[i];
+    // }
+    // length = sqrt(length);
+    // float dL_ddir[SEMANTIC_CHANNELS] = {0.f};
+    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
+    //   dL_ddir[i] = dL_dsemantic_render[i] / length;
+    // }
+
+    // glm::vec3 pos = ((glm::vec3*)means)[idx];
+    // glm::vec3 dir_orig = pos - *campos;
+    // // Account for normalization of direction
+    // // float3 dL_dmean = dnormvdv(float3{dir_orig.x, dir_orig.y, dir_orig.z},
+    // //                            float3{dL_ddir.x, dL_ddir.y, dL_ddir.z});
+
+    // // Gradients of loss w.r.t. Gaussian means, but only the portion
+    // // that is caused because the mean affects the view-dependent color.
+    // // Additional mean gradient is accumulated in below methods.
+    // dL_dmeans[idx] += glm::vec3(dL_dmean.x, dL_dmean.y, dL_dmean.z);
+
+    // dL_dtau[6 * idx + 0] += -dL_dmean.x;
+    // dL_dtau[6 * idx + 1] += -dL_dmean.y;
+    // dL_dtau[6 * idx + 2] += -dL_dmean.z;
+  }
 
   // Compute gradient updates due to computing covariance from scale/rotation
   if (scales)
@@ -1048,7 +1082,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
   }
 }
 
-template <uint32_t COLOR_CHANNEL, uint32_t SEMANTICS_CHANNEL>
+template <uint32_t COLOR_CHANNELS, uint32_t SEMANTICS_CHANNELS>
 __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
     semantic_render_cuda(const uint2* __restrict__ ranges,
                          const uint32_t* __restrict__ point_list,
@@ -1098,13 +1132,13 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
   __shared__ int collected_id[BLOCK_SIZE];
   __shared__ float2 collected_xy[BLOCK_SIZE];
   __shared__ float4 collected_conic_opacity[BLOCK_SIZE];
-  __shared__ float collected_colors[COLOR_CHANNEL * BLOCK_SIZE];
-  __shared__ float collected_semantics[SEMANTICS_CHANNEL * BLOCK_SIZE];
+  __shared__ float collected_colors[COLOR_CHANNELS * BLOCK_SIZE];
+  __shared__ float collected_semantics[SEMANTICS_CHANNELS * BLOCK_SIZE];
   __shared__ float collected_depths[BLOCK_SIZE];
 
   __shared__ float2 dL_dmean2D_shared[BLOCK_SIZE];
   __shared__ float3 dL_dcolors_shared[BLOCK_SIZE];
-  __shared__ float3 dL_dsemantics_shared[BLOCK_SIZE];  // TODO: not float3
+  __shared__ float dL_dsemantics_shared[SEMANTICS_CHANNELS * BLOCK_SIZE];
   __shared__ float dL_ddepths_shared[BLOCK_SIZE];
   __shared__ float dL_dopacity_shared[BLOCK_SIZE];
   __shared__ float4 dL_dconic2D_shared[BLOCK_SIZE];
@@ -1119,27 +1153,28 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
   uint32_t contributor = toDo;
   const int last_contributor = inside ? n_contrib[pix_id] : 0;
 
-  float accum_rec[COLOR_CHANNEL] = {0};
-  float accum_rec_semantics[COLOR_CHANNEL] = {0};
-  float dL_dpixel[COLOR_CHANNEL] = {0};
-  float dL_dpixel_semantics[SEMANTICS_CHANNEL] = {0};
+  float accum_rec[COLOR_CHANNELS] = {0};
+  float accum_rec_semantics[SEMANTICS_CHANNELS] = {0};
+  float dL_dpixel[COLOR_CHANNELS] = {0};
+  float dL_dpixel_semantics[SEMANTICS_CHANNELS] = {0};
   float accum_rec_depth = 0;
   float dL_dpixel_depth = 0;
   if (inside) {
 #pragma unroll
-    for (int i = 0; i < COLOR_CHANNEL; i++) {
+    for (int i = 0; i < COLOR_CHANNELS; i++) {
       dL_dpixel[i] = dL_dpixels[i * H * W + pix_id];
     }
-    for (int i = 0; i < SEMANTICS_CHANNEL; i++) {
+    for (int i = 0; i < SEMANTICS_CHANNELS; i++) {
       dL_dpixel_semantics[i] = dL_dpixels_semantics[i * H * W + pix_id];
     }
     dL_dpixel_depth = dL_dpixels_depth[pix_id];
   }
 
   float last_alpha = 0.f;
-  float last_alpha_semantics = 0.f;
-  float last_color[COLOR_CHANNEL] = {0.f};
-  float last_semantics[SEMANTICS_CHANNEL] = {0.f};
+  float last_color[COLOR_CHANNELS] = {0.f};
+  float last_semantics[SEMANTICS_CHANNELS] = {0.f};
+  // TODO 
+  // float last_alpha_semantics = 0.f;
   float last_depth = 0.f;
 
   // Gradient of pixel coordinate w.r.t. normalized
@@ -1160,13 +1195,13 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       collected_xy[tid] = means2D[coll_id];
       collected_conic_opacity[tid] = conic_opacity[coll_id];
 #pragma unroll
-      for (int i = 0; i < COLOR_CHANNEL; i++) {
+      for (int i = 0; i < COLOR_CHANNELS; i++) {
         collected_colors[i * BLOCK_SIZE + tid] =
-            colors[coll_id * COLOR_CHANNEL + i];
+            colors[coll_id * COLOR_CHANNELS + i];
       }
-      for (int i = 0; i < SEMANTICS_CHANNEL; i++) {
+      for (int i = 0; i < SEMANTICS_CHANNELS; i++) {
         collected_semantics[i * BLOCK_SIZE + tid] =
-            semantics[coll_id * SEMANTICS_CHANNEL + i];
+            semantics[coll_id * SEMANTICS_CHANNELS + i];
       }
       collected_depths[tid] = depths[coll_id];
     }
@@ -1213,10 +1248,10 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       float dL_dalpha = 0.0f;
       float dL_dalpha_semantics = 0.0f;
       const int global_id = collected_id[j];
-      float local_dL_dcolors[NUM_CHANNELS];
-      float local_dL_dsemantics[NUM_SEMANTIC_CHANNELS];
+      float local_dL_dcolors[COLOR_CHANNELS];
+      float local_dL_dsemantics[SEMANTICS_CHANNELS];
 #pragma unroll
-      for (int ch = 0; ch < COLOR_CHANNEL; ch++) {
+      for (int ch = 0; ch < COLOR_CHANNELS; ch++) {
         const float c = collected_colors[ch * BLOCK_SIZE + j];
         // Update last color (to be used in the next iteration)
         accum_rec[ch] = skip ? accum_rec[ch]
@@ -1232,24 +1267,27 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       dL_dcolors_shared[tid].y = local_dL_dcolors[1];
       dL_dcolors_shared[tid].z = local_dL_dcolors[2];
 
-      for (int ch = 0; ch < SEMANTICS_CHANNEL; ch++) {
+      // TODO: Is independent alpha for semantics necessary?
+
+      for (int ch = 0; ch < SEMANTICS_CHANNELS; ch++) {
         const float s = collected_semantics[ch * BLOCK_SIZE + j];
         // Update last color (to be used in the next iteration)
         accum_rec_semantics[ch] =
             skip ? accum_rec_semantics[ch]
-                 : last_alpha_semantics * last_semantics[ch] +
-                       (1.f - last_alpha_semantics) * accum_rec_semantics[ch];
+                 : last_alpha * last_semantics[ch] +
+                       (1.f - last_alpha) * accum_rec_semantics[ch];
         last_semantics[ch] = skip ? last_semantics[ch] : s;
 
-        const float dL_dchannel = dL_dpixel_semantics[ch];
-        dL_dalpha_semantics += (s - accum_rec_semantics[ch]) * dL_dchannel;
+        const float dL_dsemantic_channel = dL_dpixel_semantics[ch];
+        // semantics contributions to alpha's gradient
+        dL_dalpha += (s - accum_rec_semantics[ch]) * dL_dsemantic_channel;
         local_dL_dsemantics[ch] =
-            skip ? 0.0f : dchannel_dsemantics * dL_dchannel;
+            skip ? 0.0f : dchannel_dsemantics * dL_dsemantic_channel;
       }
-      // TODO
-      dL_dsemantics_shared[tid].x = local_dL_dsemantics[0];
-      dL_dsemantics_shared[tid].y = local_dL_dsemantics[1];
-      dL_dsemantics_shared[tid].z = local_dL_dsemantics[2];
+      for (int i = 0; i < SEMANTICS_CHANNELS; i++) {
+        dL_dsemantics_shared[tid * SEMANTICS_CHANNELS + i] =
+            local_dL_dsemantics[i];
+      }
 
       const float depth = collected_depths[j];
       accum_rec_depth =
@@ -1262,17 +1300,19 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       dL_dalpha *= T;
       // Update last alpha (to be used in the next iteration)
       last_alpha = skip ? last_alpha : alpha;
+      // TODO:
+      // last_alpha_semantics = skip ? last_alpha_semantics : alpha;
 
       // Account for fact that alpha also influences how much of
       // the background color is added if nothing left to blend
 
-      // TODO
       float bg_dot_dpixel = 0.f;
 #pragma unroll
-      for (int i = 0; i < COLOR_CHANNEL; i++) {
+      for (int i = 0; i < COLOR_CHANNELS; i++) {
         bg_dot_dpixel += background_color[i] * dL_dpixel[i];
       }
       dL_dalpha += (-T_final / (1.f - alpha)) * bg_dot_dpixel;
+      // TODO: if semantics affects alpha, also consider backgound_semantics
 
       // Helpful reusable temporary variables
       const float dL_dG = con_o.w * dL_dalpha;
@@ -1301,7 +1341,10 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
         float4 dL_dconic2D_acc = dL_dconic2D_shared[0];
         float dL_dopacity_acc = dL_dopacity_shared[0];
         float3 dL_dcolors_acc = dL_dcolors_shared[0];
-        float3 dL_dsemantics_acc = dL_dsemantics_shared[0];
+        float dL_dsemantics_acc[SEMANTICS_CHANNELS];
+        for (int i = 0; i < SEMANTICS_CHANNELS; i++) {
+          dL_dsemantics_acc[i] = dL_dsemantics_shared[i];
+        }
         float dL_ddepths_acc = dL_ddepths_shared[0];
 
         atomicAdd(&dL_dmean2D[global_id].x, dL_dmean2D_acc.x);
@@ -1310,16 +1353,16 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
         atomicAdd(&dL_dconic2D[global_id].y, dL_dconic2D_acc.y);
         atomicAdd(&dL_dconic2D[global_id].w, dL_dconic2D_acc.w);
         atomicAdd(&dL_dopacity[global_id], dL_dopacity_acc);
-        atomicAdd(&dL_dcolors[global_id * COLOR_CHANNEL + 0], dL_dcolors_acc.x);
-        atomicAdd(&dL_dcolors[global_id * COLOR_CHANNEL + 1], dL_dcolors_acc.y);
-        atomicAdd(&dL_dcolors[global_id * COLOR_CHANNEL + 2], dL_dcolors_acc.z);
-        // TODO: !
-        atomicAdd(&dL_dsemantics[global_id * SEMANTICS_CHANNEL + 0],
-                  dL_dsemantics_acc.x);
-        atomicAdd(&dL_dsemantics[global_id * SEMANTICS_CHANNEL + 1],
-                  dL_dsemantics_acc.y);
-        atomicAdd(&dL_dsemantics[global_id * SEMANTICS_CHANNEL + 2],
-                  dL_dsemantics_acc.z);
+        atomicAdd(&dL_dcolors[global_id * COLOR_CHANNELS + 0],
+                  dL_dcolors_acc.x);
+        atomicAdd(&dL_dcolors[global_id * COLOR_CHANNELS + 1],
+                  dL_dcolors_acc.y);
+        atomicAdd(&dL_dcolors[global_id * COLOR_CHANNELS + 2],
+                  dL_dcolors_acc.z);
+        for (int i = 0; i < SEMANTICS_CHANNELS; i++) {
+          atomicAdd(&dL_dsemantics[global_id * SEMANTICS_CHANNELS + i],
+                    dL_dsemantics_acc[i]);
+        }
         atomicAdd(&dL_ddepths[global_id], dL_ddepths_acc);
       }
     }
@@ -1549,7 +1592,7 @@ void BACKWARD::semantic_render(const dim3 grid,
                                float* dL_dcolors,
                                float* dL_dsemantics,
                                float* dL_ddepths) {
-  semantic_render_cuda<NUM_CHANNELS, NUM_CHANNELS>
+  semantic_render_cuda<NUM_CHANNELS, NUM_SEMANTIC_CHANNELS>
       <<<grid, block>>>(ranges,
                         point_list,
                         W,

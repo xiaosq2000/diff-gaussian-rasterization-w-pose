@@ -178,9 +178,11 @@ RasterizeSemanticGaussiansCUDA(const torch::Tensor& background_color,
   auto float_opts = means3D.options().dtype(torch::kFloat32);
 
   torch::Tensor out_colors = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
-  // ?
+
+  // TODO
   torch::Tensor out_semantics =
       torch::full({NUM_SEMANTIC_CHANNELS, H, W}, 0.0, float_opts);
+
   torch::Tensor radii =
       torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
   torch::Tensor n_touched =
@@ -427,7 +429,8 @@ RasterizeSemanticGaussiansBackwardCUDA(
   torch::Tensor dL_dopacity = torch::zeros({P, 1}, means3D.options());
   torch::Tensor dL_dcov3D = torch::zeros({P, 6}, means3D.options());
   torch::Tensor dL_dsh = torch::zeros({P, M, NUM_CHANNELS}, means3D.options());
-  torch::Tensor dL_dsemantic_sh = torch::zeros({P, M, NUM_SEMANTIC_CHANNELS}, means3D.options());
+  torch::Tensor dL_dsemantic_sh =
+      torch::zeros({P, semantic_M, NUM_SEMANTIC_CHANNELS}, means3D.options());
   torch::Tensor dL_dscales = torch::zeros({P, 3}, means3D.options());
   torch::Tensor dL_drotations = torch::zeros({P, 4}, means3D.options());
   torch::Tensor dL_dtau = torch::zeros({P, 6}, means3D.options());

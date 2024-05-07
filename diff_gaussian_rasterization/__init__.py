@@ -22,6 +22,7 @@ class GaussianRasterizationSettings(NamedTuple):
     tanfovx: float
     tanfovy: float
     background_color: torch.Tensor
+    background_semantics: torch.Tensor
     scale_modifier: float
     viewmatrix: torch.Tensor
     projmatrix: torch.Tensor
@@ -323,7 +324,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
         # Restructure arguments the way that the C++ lib expects them
         args = (
             raster_settings.background_color,
-            raster_settings.background_color,  # TODO
+            raster_settings.background_semantics,
             means3D,
             colors_precomp,
             semantics_precomp,
@@ -435,7 +436,7 @@ class _RasterizeSemanticGaussians(torch.autograd.Function):
         # Restructure args as C++ method expects them
         args = (
             raster_settings.background_color,
-            raster_settings.background_color,  # TODO
+            raster_settings.background_semantics,
             means3D,
             radii,
             colors_precomp,

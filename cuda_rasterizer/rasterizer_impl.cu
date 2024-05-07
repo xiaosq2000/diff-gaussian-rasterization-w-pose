@@ -441,11 +441,6 @@ int CudaRasterizer::SemanticRasterizer::forward(
         "For non-RGB, provide precomputed Gaussian colors!");
   }
 
-  // TODO
-  // if (semantics_precomp == nullptr) {
-  //   throw std::runtime_error("Only semantics precompuation is supported!");
-  // }
-
   // Run preprocessing per-Gaussian (transformation, bounding, conversion of SHs to RGB)
   CHECK_CUDA(FORWARD::semantic_preprocess(P,
                                           degree,

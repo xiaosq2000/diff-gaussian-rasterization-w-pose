@@ -22,7 +22,7 @@ __device__ glm::vec3 computeColorFromSH(int idx,
                                         int deg,
                                         int max_coeffs,
                                         const glm::vec3* means,
-                                        glm::vec3 campos,
+                                        const glm::vec3 campos,
                                         const float* shs,
                                         bool* clamped) {
   // The implementation is loosely based on code for
@@ -388,8 +388,6 @@ __global__ void semantic_preprocess_cuda(int num_gaussians,
     rgb[index * COLOR_CHANNELS + 1] = result.y;
     rgb[index * COLOR_CHANNELS + 2] = result.z;
   }
-
-  // TODO
   if (semantics_precomp == nullptr) {
     glm::vec3 result = computeColorFromSH(index,
                                           0,  // D=0
@@ -401,6 +399,10 @@ __global__ void semantic_preprocess_cuda(int num_gaussians,
     semantics[index * SEMANTIC_CHANNELS + 0] = result.x;
     semantics[index * SEMANTIC_CHANNELS + 1] = result.y;
     semantics[index * SEMANTIC_CHANNELS + 2] = result.z;
+    // const float* sh = semantic_shs + SEMANTIC_CHANNELS * index;
+    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
+    //   semantics[index * SEMANTIC_CHANNELS + i] = sh[i];
+    // }
   }
 
   // Store some useful helper data for the next steps.
@@ -654,6 +656,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       for (int ch = 0; ch < COLOR_CHANNELS; ch++) {
         C[ch] += features[collected_id[j] * COLOR_CHANNELS + ch] * alpha * T;
       }
+      // ! Semantic Alpha Blending
       for (int ch = 0; ch < SEMANTIC_CHANNELS; ch++) {
         S[ch] += semantic_features[collected_id[j] * SEMANTIC_CHANNELS + ch] *
                  alpha * T;
