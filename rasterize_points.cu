@@ -179,10 +179,8 @@ RasterizeSemanticGaussiansCUDA(const torch::Tensor& background_color,
 
   torch::Tensor out_colors = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
 
-  // TODO
   torch::Tensor out_semantics =
       torch::full({NUM_SEMANTIC_CHANNELS, H, W}, 0.0, float_opts);
-
   torch::Tensor radii =
       torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
   torch::Tensor n_touched =
@@ -413,6 +411,7 @@ RasterizeSemanticGaussiansBackwardCUDA(
   if (sh.size(0) != 0) {
     M = sh.size(1);
   }
+  // TODO
   int semantic_M = 0;
   if (semantic_sh.size(0) != 0) {
     semantic_M = sh.size(1);
@@ -421,7 +420,6 @@ RasterizeSemanticGaussiansBackwardCUDA(
   torch::Tensor dL_dmeans3D = torch::zeros({P, 3}, means3D.options());
   torch::Tensor dL_dmeans2D = torch::zeros({P, 3}, means3D.options());
   torch::Tensor dL_dcolors = torch::zeros({P, NUM_CHANNELS}, means3D.options());
-  // ?
   torch::Tensor dL_dsemantics =
       torch::zeros({P, NUM_SEMANTIC_CHANNELS}, means3D.options());
   torch::Tensor dL_ddepths = torch::zeros({P, 1}, means3D.options());

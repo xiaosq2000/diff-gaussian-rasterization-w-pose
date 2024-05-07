@@ -1456,9 +1456,8 @@ void BACKWARD::semantic_preprocess(int P,
                                              (float3*)dL_dmeans3D,
                                              dL_dcov3D,
                                              dL_dtau);
-
   // Propagate gradients for remaining steps: finish 3D mean gradients,
-  // propagate color gradients to SH (if desireD), propagate 3D covariance
+  // propagate color gradients to SH (if desired), propagate 3D covariance
   // matrix gradients to scale and rotation.
   semantic_preprocess_cuda<NUM_CHANNELS, NUM_SEMANTIC_CHANNELS>
       <<<(P + 255) / 256, 256>>>(P,
