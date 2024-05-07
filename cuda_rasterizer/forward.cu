@@ -389,20 +389,10 @@ __global__ void semantic_preprocess_cuda(int num_gaussians,
     rgb[index * COLOR_CHANNELS + 2] = result.z;
   }
   if (semantics_precomp == nullptr) {
-    glm::vec3 result = computeColorFromSH(index,
-                                          0,  // D=0
-                                          semantic_M,
-                                          (glm::vec3*)orig_points,
-                                          *cam_pos,
-                                          semantic_shs,
-                                          clamped);
-    semantics[index * SEMANTIC_CHANNELS + 0] = result.x;
-    semantics[index * SEMANTIC_CHANNELS + 1] = result.y;
-    semantics[index * SEMANTIC_CHANNELS + 2] = result.z;
-    // const float* sh = semantic_shs + SEMANTIC_CHANNELS * index;
-    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
-    //   semantics[index * SEMANTIC_CHANNELS + i] = sh[i];
-    // }
+    const float* semantic_sh = semantic_shs + SEMANTIC_CHANNELS * index;
+    for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
+      semantics[index * SEMANTIC_CHANNELS + i] = semantic_sh[i];
+    }
   }
 
   // Store some useful helper data for the next steps.

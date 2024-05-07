@@ -776,50 +776,12 @@ __global__ void semantic_preprocess_cuda(int P,
                        (glm::vec3*)dL_dsh,
                        dL_dtau);
 
-  // TODO
   if (semantic_shs) {
-    computeColorFromSH(idx,
-                       0,  // D=0
-                       semantic_M,
-                       (glm::vec3*)means,
-                       *campos,
-                       semantic_shs,
-                       clamped,
-                       (glm::vec3*)dL_dsemantics,
-                       (glm::vec3*)dL_dmeans,
-                       (glm::vec3*)dL_dsemantic_sh,
-                       dL_dtau);
-
-    // float dL_dsemantic_render[SEMANTIC_CHANNELS] = {0.f};
-    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
-    //   dL_dsemantic_render[i] = dL_dsemantic_sh[idx * SEMANTIC_CHANNELS + i] *
-    //                          (clamped[idx * SEMANTIC_CHANNELS + i] ? 0 : 1);
-    // }
-    // glm::vec3* sh = ((glm::vec3*)dL_dsemantic_sh) + idx * semantic_M;
-    // float length = 0;
-    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
-    //   length += dL_dsemantic_render[i] * dL_dsemantic_render[i];
-    // }
-    // length = sqrt(length);
-    // float dL_ddir[SEMANTIC_CHANNELS] = {0.f};
-    // for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
-    //   dL_ddir[i] = dL_dsemantic_render[i] / length;
-    // }
-
-    // glm::vec3 pos = ((glm::vec3*)means)[idx];
-    // glm::vec3 dir_orig = pos - *campos;
-    // // Account for normalization of direction
-    // // float3 dL_dmean = dnormvdv(float3{dir_orig.x, dir_orig.y, dir_orig.z},
-    // //                            float3{dL_ddir.x, dL_ddir.y, dL_ddir.z});
-
-    // // Gradients of loss w.r.t. Gaussian means, but only the portion
-    // // that is caused because the mean affects the view-dependent color.
-    // // Additional mean gradient is accumulated in below methods.
-    // dL_dmeans[idx] += glm::vec3(dL_dmean.x, dL_dmean.y, dL_dmean.z);
-
-    // dL_dtau[6 * idx + 0] += -dL_dmean.x;
-    // dL_dtau[6 * idx + 1] += -dL_dmean.y;
-    // dL_dtau[6 * idx + 2] += -dL_dmean.z;
+    const float* dL_semantics_ = dL_dsemantics + idx * SEMANTIC_CHANNELS;
+    float* dL_dsemantic_sh_ = dL_dsemantic_sh + idx * SEMANTIC_CHANNELS;
+    for (int i = 0; i < SEMANTIC_CHANNELS; i++) {
+      dL_dsemantic_sh_[i] = dL_semantics_[i];
+    }
   }
 
   // Compute gradient updates due to computing covariance from scale/rotation
@@ -1173,7 +1135,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
   float last_alpha = 0.f;
   float last_color[COLOR_CHANNELS] = {0.f};
   float last_semantics[SEMANTICS_CHANNELS] = {0.f};
-  // TODO 
+  // TODO
   // float last_alpha_semantics = 0.f;
   float last_depth = 0.f;
 
