@@ -17,4 +17,7 @@
 #define BLOCK_X 16
 #define BLOCK_Y 16
 
+#define CUDA_DEVICE_INDEX 7
+#define STRINGIFY2(X) #X
+#define STRINGIFY(X) STRINGIFY2(X)
 #endif

@@ -698,7 +698,20 @@ class SemanticGaussianRasterizer(nn.Module):
                 raster_settings,
             )
         )
-        # Decode
-        decoded_semantics = self.semantic_decoder(semantics)
 
-        return colors, semantics, decoded_semantics, radii, depth, opacity, n_touched
+        # TODO
+        decoded_semantics = self.semantic_decoder(semantics)
+        softmax_decoded_semantics = torch.nn.functional.softmax(
+            decoded_semantics, dim=1
+        )
+
+        return (
+            colors,
+            semantics,
+            decoded_semantics,
+            softmax_decoded_semantics,
+            radii,
+            depth,
+            opacity,
+            n_touched,
+        )

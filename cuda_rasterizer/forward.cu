@@ -388,6 +388,7 @@ __global__ void semantic_preprocess_cuda(int num_gaussians,
     rgb[index * COLOR_CHANNELS + 1] = result.y;
     rgb[index * COLOR_CHANNELS + 2] = result.z;
   }
+
   if (semantics_precomp == nullptr) {
     const float* semantic_sh = semantic_shs + SEMANTIC_CHANNELS * index;
     for (int i = 0; i < SEMANTIC_CHANNELS; i++) {

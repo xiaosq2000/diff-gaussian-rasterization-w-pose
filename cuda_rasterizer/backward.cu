@@ -1148,7 +1148,7 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
   // Traverse all Gaussians
   for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE) {
     // Load auxiliary data into shared memory, start in the BACK
-    // and load them in revers order.
+    // and load them in reverse order.
     // block.sync();
     const int progress = i * BLOCK_SIZE + tid;
     if (range.x + progress < range.y) {
@@ -1229,11 +1229,11 @@ __global__ void __launch_bounds__(BLOCK_X* BLOCK_Y)
       dL_dcolors_shared[tid].y = local_dL_dcolors[1];
       dL_dcolors_shared[tid].z = local_dL_dcolors[2];
 
-      // TODO: Is independent alpha for semantics necessary?
+      // TODO: independent alpha for semantics
 
       for (int ch = 0; ch < SEMANTICS_CHANNELS; ch++) {
         const float s = collected_semantics[ch * BLOCK_SIZE + j];
-        // Update last color (to be used in the next iteration)
+        // Update last semantics (to be used in the next iteration)
         accum_rec_semantics[ch] =
             skip ? accum_rec_semantics[ch]
                  : last_alpha * last_semantics[ch] +
