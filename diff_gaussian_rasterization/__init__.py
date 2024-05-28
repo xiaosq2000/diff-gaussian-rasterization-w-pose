@@ -699,17 +699,29 @@ class SemanticGaussianRasterizer(nn.Module):
             )
         )
 
-        # TODO
-        decoded_semantics = self.semantic_decoder(semantics)
-        softmax_decoded_semantics = torch.nn.functional.softmax(
-            decoded_semantics, dim=1
+        # TODO: Actually softmax is computed twice.
+        # 1. generate confidence map
+        # 2. semantic mapping loss
+        segmentation_logits = self.semantic_decoder(semantics)
+        segmentation_probabilities = torch.nn.functional.softmax(
+            segmentation_logits, dim=1
+        )
+        (segmentation_masks_probabilities, segmentation_masks_labels) = torch.max(
+            segmentation_probabilities, dim=1
+        )
+        _, h, w = colors.shape
+        segmentation_masks_labels = segmentation_masks_labels.reshape(h, w)
+        segmentation_masks_probabilities = segmentation_masks_probabilities.reshape(
+            h, w
         )
 
         return (
             colors,
             semantics,
-            decoded_semantics,
-            softmax_decoded_semantics,
+            segmentation_logits,
+            segmentation_probabilities,
+            segmentation_masks_probabilities,
+            segmentation_masks_labels,
             radii,
             depth,
             opacity,
